@@ -18,7 +18,7 @@ the `farmer` directory using oemof-solph
 You need two python packages for the example to work:
 
 ```
-pip install mpisppy
+pip install mpi-sppy
 pip install mpi4py
 pip install git+https://github.com/oemof/oemof_visio.git
 pip install graphviz

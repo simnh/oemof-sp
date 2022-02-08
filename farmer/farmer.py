@@ -8,7 +8,7 @@ from oemof_visio import ESGraphRenderer
 yields = {
     "good": dict(zip(["wheat", "corn", "beets"], [3, 3.6, 24])),
     "average": dict(zip(["wheat", "corn", "beets"], [2.5, 3, 20])),
-    "bad": dict(zip(["wheat", "corn", "beets"], [2, 2.4, 16]))
+    "bad": dict(zip(["wheat", "corn", "beets"], [2, 2.4, 16])),
 }
 
 planting_costs = {"wheat": 150, "corn": 230, "beets": 260}
@@ -16,6 +16,7 @@ purchase_costs = {"wheat": 238, "corn": 210}
 revenue = {"wheat": 170, "corn": 150, "beets-fav": 36, "beets-unfav": 10}
 minimum_keep = {"wheat": 200, "corn": 240, "beets": 0}
 ub = {"beets-fav": 6000}
+
 
 def build_solph_model(yields):
     """ """
@@ -29,7 +30,7 @@ def build_solph_model(yields):
         "beets": solph.buses.Bus(label="beets"),
         "cornfield": solph.buses.Bus("cornfield", balanced=False),
         "wheatfield": solph.buses.Bus("wheatfield", balanced=False),
-        "beetsfield": solph.buses.Bus("beetsfield", balanced=False)
+        "beetsfield": solph.buses.Bus("beetsfield", balanced=False),
     }
     es.add(*buses.values())
 
@@ -37,19 +38,20 @@ def build_solph_model(yields):
         es.add(
             solph.components.Transformer(
                 label=product + "_plant",
-                inputs = {buses[product+"field"]:
-                    solph.flows.Flow(
+                inputs={
+                    buses[product + "field"]: solph.flows.Flow(
                         variable_costs=planting_costs[product],
                         share=True,
                         firststage=True,
-                    )},
-                outputs = {
+                    )
+                },
+                outputs={
                     buses[product]: solph.flows.Flow(
                         # variable_costs=0,
                         # firststage=True,
-                    )},
-                conversion_factors={buses[product]: yields[product]
+                    )
                 },
+                conversion_factors={buses[product]: yields[product]},
             )
         )
         es.add(
@@ -57,9 +59,7 @@ def build_solph_model(yields):
                 label=product + "_slack",
                 inputs={
                     buses[product]: solph.flows.Flow(
-                        min=minimum_keep[product],
-                        max=100000,
-                        nominal_value=1
+                        min=minimum_keep[product], max=100000, nominal_value=1
                     )
                 },
             )
@@ -79,27 +79,34 @@ def build_solph_model(yields):
             es.add(
                 solph.components.Sink(
                     label=product + "_sale",
-                    inputs={buses[product]: solph.flows.Flow(
-                        variable_costs=-revenue[product])},
+                    inputs={
+                        buses[product]: solph.flows.Flow(
+                            variable_costs=-revenue[product]
+                        )
+                    },
                 )
             )
         else:
             es.add(
                 solph.components.Sink(
                     label=product + "-fav_sale",
-                    inputs={buses[product]: solph.flows.Flow(
-                        variable_costs=-revenue[product + "-fav"],
-                        nominal_value=1,
-                        max=ub.get(product + "-fav"),
-                    )},
+                    inputs={
+                        buses[product]: solph.flows.Flow(
+                            variable_costs=-revenue[product + "-fav"],
+                            nominal_value=1,
+                            max=ub.get(product + "-fav"),
+                        )
+                    },
                 )
             )
             es.add(
                 solph.components.Sink(
                     label=product + "-unfav_sale",
-                    inputs={buses[product]: solph.flows.Flow(
-                        variable_costs=-revenue[product + "-unfav"]
-                    )},
+                    inputs={
+                        buses[product]: solph.flows.Flow(
+                            variable_costs=-revenue[product + "-unfav"]
+                        )
+                    },
                 )
             )
 
@@ -107,8 +114,8 @@ def build_solph_model(yields):
 
     # limit total planting of wheat and corn
     om = solph.constraints.generic_integral_limit(
-        om, keyword="share",
-        limit=500)
+        om, keyword="share", limit=500
+    )
 
     # other way to get the flows which share the limit ...
     # flows={(s,t):f for (s,t),f in om.es.flows().items()
@@ -118,10 +125,13 @@ def build_solph_model(yields):
     # om.integral_limit_share.pprint()
     return om
 
+
 # deterministic model for average scenario
 om = build_solph_model(yields["average"])
-om.write("model.lp", io_options ={"symbolic_solver_labels": True})
-gr = ESGraphRenderer(energy_system=om.es, filepath="energy_system", img_format="png")
+om.write("model.lp", io_options={"symbolic_solver_labels": True})
+gr = ESGraphRenderer(
+    energy_system=om.es, filepath="energy_system", img_format="png"
+)
 gr.view()
 
 om.solve(solver="cbc")
@@ -136,12 +146,12 @@ def scenario_creator(scenario_name):
 
     model = build_solph_model(yields[scenario_name])
     sputils.attach_root_node(
-        model,
-        model.first_stage_objective_expression,
-        model.first_stage_vars)
+        model, model.first_stage_objective_expression, model.first_stage_vars
+    )
     model._mpisppy_probability = 1.0 / 3
 
     return model
+
 
 # extensive form --------------------------------------------------------
 
