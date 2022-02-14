@@ -13,6 +13,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import pyomo.environ as po
 
 def _get_results(model):
     """
@@ -40,7 +41,7 @@ def build_model(scenario_data):
 
     energysystem.add(
         solph.components.Sink(
-            label="excess_bel", inputs={bel: solph.flows.Flow()}
+            label="excess_bel", inputs={bel: solph.flows.Flow(variable_costs=10)}
         )
     )
 
@@ -50,7 +51,7 @@ def build_model(scenario_data):
             outputs={
                 bel: solph.flows.Flow(
                     max=data["wind"].values,
-                    investment=solph.Investment(ep_costs=120, stochastic=True),
+                    investment=solph.Investment(ep_costs=120, firststage=True),
                 )
             },
         )
@@ -61,7 +62,7 @@ def build_model(scenario_data):
             outputs={
                 bel: solph.flows.Flow(
                     max=scenario_data,
-                    investment=solph.Investment(ep_costs=5, stochastic=True),
+                    investment=solph.Investment(ep_costs=2, firststage=True),
                 )
             },
         )
@@ -72,7 +73,7 @@ def build_model(scenario_data):
             outputs={
                 bel: solph.flows.Flow(
                     variable_costs=20,
-                    investment=solph.Investment(ep_costs=60, stochastic=True),
+                    investment=solph.Investment(ep_costs=60, firststage=True),
                 )
             },
         )
@@ -103,15 +104,16 @@ invest_deterministic = {}
 for sc in scenarios:
     om = build_model(scenarios[sc].values)
     om.solve("cbc")
-    invest_deterministic[sc] = get_results(om)
+    invest_deterministic[sc] = _get_results(om)
     print(om.objective())
 
+#om.pprint()
 
 def scenario_creator(scenario_name):
     """ """
     model = build_model(scenarios[scenario_name].values)
     sputils.attach_root_node(
-        model, model.first_stage_objective_expression, model.first_stage_vars
+        model, model.InvestmentFlowBlock.firststage_investment_costs, model.firststage_vars
     )
     model._mpisppy_probability = prob.at[scenario_name, "0"]
     return model
@@ -123,11 +125,10 @@ ef = ExtensiveForm(options, scenarios.columns, scenario_creator)
 results = ef.solve_extensive_form()
 objval = ef.get_objective_value()
 print("Extensive form obj value:", f"{objval:.1f}")
-
+#ef.ef.pprint()
 invest = {}
 for sc in scenarios:
-    invest[sc + "-sp"] = get_results(getattr(ef.ef, sc))
-
+    invest[sc + "-sp"] = _get_results(getattr(ef.ef, sc))
 df = pd.concat(
     [pd.DataFrame(invest_deterministic), pd.DataFrame(invest)["sc0-sp"]],
     axis=1,
@@ -138,3 +139,33 @@ ax = df.T.plot(kind="bar", color=["skyblue", "slategray", "gold"], grid=True)
 ax.set_xlabel("Scenarios")
 ax.set_ylabel("Installed capacitiy")
 
+#
+# from mpisppy.opt.ph import PH
+#
+# options = {
+#     "solvername": "cbc",
+#     "PHIterLimit": 20,
+#     "defaultPHrho": 10,
+#     "convthresh": 1e-7,
+#     "verbose": False,
+#     "display_progress": False,
+#     "display_timing": False,
+#     "iter0_solver_options": dict(),
+#     "iterk_solver_options": dict(),
+# }
+#
+# ph = PH(
+#     options,
+#     scenarios.columns,
+#     scenario_creator,
+# )
+# ph.ph_main()
+# variables = ph.gather_var_values_to_rank0()
+# for (scenario_name, variable_name) in variables:
+#     variable_value = variables[scenario_name, variable_name]
+#     print(scenario_name, variable_name, variable_value)
+#
+# solph.processing.results(ph.local_scenarios["sc1"])
+#
+#
+# ph.local_scenarios["sc1"].pprint()
