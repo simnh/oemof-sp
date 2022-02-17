@@ -78,8 +78,6 @@ def build_model(scenario_data):
             },
         )
     )
-
-    # create simple sink object representing the electrical demand
     energysystem.add(
         solph.components.Sink(
             label="demand",
